@@ -33,29 +33,28 @@ local libcutils_sources="
 	properties.cpp
 	record_stream.cpp
 	strlcpy.c
-	threads.cpp
 "
 
 # libutils
 local libutils_sources="
-	Errors.cpp
+	binder/Errors.cpp
 	FileMap.cpp
 	JenkinsHash.cpp
 	LightRefBase.cpp
 	NativeHandle.cpp
 	Printer.cpp
-	RefBase.cpp
-	SharedBuffer.cpp
+	binder/RefBase.cpp
+	binder/SharedBuffer.cpp
 	StopWatch.cpp
-	String8.cpp
-	String16.cpp
-	StrongPointer.cpp
+	binder/String8.cpp
+	binder/String16.cpp
+	binder/StrongPointer.cpp
 	SystemClock.cpp
 	Threads.cpp
 	Timers.cpp
 	Tokenizer.cpp
-	Unicode.cpp
-	VectorImpl.cpp
+	binder/Unicode.cpp
+	binder/VectorImpl.cpp
 	misc.cpp
 "
 
@@ -65,7 +64,6 @@ local libbase_linux_sources="
 "
 local libbase_sources="
 	$libbase_linux_sources
-	abi_compatibility.cpp
 	chrono_utils.cpp
 	cmsg.cpp
 	file.cpp
@@ -77,6 +75,7 @@ local libbase_sources="
 	posix_strerror_r.cpp
 	process.cpp
 	properties.cpp
+	result.cpp
 	stringprintf.cpp
 	strings.cpp
 	threads.cpp
@@ -98,24 +97,36 @@ libziparchive_sources+="
 # androidfw
 local androidfw_sources="
 	ApkAssets.cpp
+	ApkParsing.cpp
 	Asset.cpp
 	AssetDir.cpp
 	AssetManager.cpp
 	AssetManager2.cpp
 	AssetsProvider.cpp
 	AttributeResolution.cpp
+	BigBuffer.cpp
+	BigBufferStream.cpp
 	ChunkIterator.cpp
 	ConfigDescription.cpp
+	FileStream.cpp
 	Idmap.cpp
 	LoadedArsc.cpp
 	Locale.cpp
 	LocaleData.cpp
+	LocaleDataLookup.cpp
 	misc.cpp
+	NinePatch.cpp
 	ObbFile.cpp
+	PathUtils.cpp
 	PosixUtils.cpp
+	Png.cpp
+	PngChunkFilter.cpp
+	PngCrunch.cpp
+	ResourceTimer.cpp
 	ResourceTypes.cpp
 	ResourceUtils.cpp
 	StreamingZipInflater.cpp
+	StringPool.cpp
 	TypeWrappers.cpp
 	Util.cpp
 	ZipFileRO.cpp
@@ -124,7 +135,9 @@ local androidfw_sources="
 
 # aapt2
 local libaapt2_proto="
+	ApkInfo.proto
 	Configuration.proto
+	ResourceMetadata.proto
 	Resources.proto
 	ResourcesInternal.proto
 "
@@ -132,10 +145,6 @@ local libaapt2_sources="
 	${libaapt2_proto//.proto/.pb.cc}
 	compile/IdAssigner.cpp
 	compile/InlineXmlFormatParser.cpp
-	compile/NinePatch.cpp
-	compile/Png.cpp
-	compile/PngChunkFilter.cpp
-	compile/PngCrunch.cpp
 	compile/PseudolocaleGenerator.cpp
 	compile/Pseudolocalizer.cpp
 	compile/XmlIdCollector.cpp
@@ -147,21 +156,22 @@ local libaapt2_sources="
 	format/Container.cpp
 	format/binary/BinaryResourceParser.cpp
 	format/binary/ResChunkPullParser.cpp
+	format/binary/ResEntryWriter.cpp
 	format/binary/TableFlattener.cpp
 	format/binary/XmlFlattener.cpp
 	format/proto/ProtoDeserialize.cpp
 	format/proto/ProtoSerialize.cpp
-	io/BigBufferStream.cpp
 	io/File.cpp
-	io/FileStream.cpp
 	io/FileSystem.cpp
 	io/StringStream.cpp
 	io/Util.cpp
 	io/ZipArchive.cpp
 	link/AutoVersioner.cpp
+	link/FeatureFlagsFilter.cpp
+	link/FlaggedXmlVersioner.cpp
+	link/FlagDisabledResourceRemover.cpp
 	link/ManifestFixer.cpp
 	link/NoDefaultResourceRemover.cpp
-	link/ProductFilter.cpp
 	link/PrivateAttributeMover.cpp
 	link/ReferenceLinker.cpp
 	link/ResourceExcluder.cpp
@@ -170,16 +180,16 @@ local libaapt2_sources="
 	link/XmlNamespaceRemover.cpp
 	link/XmlReferenceLinker.cpp
 	optimize/MultiApkGenerator.cpp
+	optimize/Obfuscator.cpp
 	optimize/ResourceDeduper.cpp
 	optimize/ResourceFilter.cpp
-	optimize/ResourcePathShortener.cpp
 	optimize/VersionCollapser.cpp
+	process/ProductFilter.cpp
 	process/SymbolTable.cpp
 	split/TableSplitter.cpp
 	text/Printer.cpp
 	text/Unicode.cpp
 	text/Utf8Iterator.cpp
-	util/BigBuffer.cpp
 	util/Files.cpp
 	util/Util.cpp
 	Debug.cpp
@@ -196,7 +206,6 @@ local libaapt2_sources="
 	ResourceUtils.cpp
 	ResourceValues.cpp
 	SdkConstants.cpp
-	StringPool.cpp
 	trace/TraceBuffer.cpp
 	xml/XmlActionExecutor.cpp
 	xml/XmlDom.cpp
@@ -206,6 +215,7 @@ local libaapt2_sources="
 "
 local aapt2_tool_sources="
 	cmd/Command.cpp
+	cmd/ApkInfo.cpp
 	cmd/Compile.cpp
 	cmd/Convert.cpp
 	cmd/Diff.cpp
@@ -226,6 +236,7 @@ local libaidl_sources="
 	aidl_const_expressions.cpp
 	aidl_dumpapi.cpp
 	aidl_language.cpp
+	aidl_to_common.cpp
 	aidl_to_cpp_common.cpp
 	aidl_to_cpp.cpp
 	aidl_to_java.cpp
@@ -239,6 +250,7 @@ local libaidl_sources="
 	comments.cpp
 	diagnostics.cpp
 	generate_aidl_mappings.cpp
+	generate_cpp_analyzer.cpp
 	generate_cpp.cpp
 	generate_java_binder.cpp
 	generate_java.cpp
@@ -254,7 +266,7 @@ local libaidl_sources="
 	preprocess.cpp
 "
 libaidl_sources+="
-	lex.yy.c
+	aidl_language_l.cpp
 	aidl_language_y.tab.cc
 "
 local aidl_sources="

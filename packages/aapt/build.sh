@@ -2,57 +2,59 @@ TERMUX_PKG_HOMEPAGE=https://elinux.org/Android_aapt
 TERMUX_PKG_DESCRIPTION="Android Asset Packaging Tool"
 TERMUX_PKG_LICENSE="Apache-2.0"
 TERMUX_PKG_MAINTAINER="@termux"
-_TAG_VERSION=13.0.0
-_TAG_REVISION=6
+_TAG_VERSION=16.0.0
+_TAG_REVISION=2
+_ANDROID_BUILD_TOOLS_COMMIT=c1266c5c3bc85ef9aa3aca61d0e67d547fe99252
 TERMUX_PKG_VERSION=${_TAG_VERSION}.${_TAG_REVISION}
-TERMUX_PKG_REVISION=23
-TERMUX_PKG_SRCURL=(https://android.googlesource.com/platform/frameworks/base
-                   https://android.googlesource.com/platform/system/core
-                   https://android.googlesource.com/platform/system/libbase
-                   https://android.googlesource.com/platform/system/libziparchive
-                   https://android.googlesource.com/platform/system/logging
-                   https://android.googlesource.com/platform/system/incremental_delivery
-                   https://android.googlesource.com/platform/build
-                   https://android.googlesource.com/platform/system/tools/aidl)
-TERMUX_PKG_GIT_BRANCH=android-${_TAG_VERSION}_r${_TAG_REVISION}
-TERMUX_PKG_SHA256=(SKIP_CHECKSUM
-                   SKIP_CHECKSUM
-                   SKIP_CHECKSUM
-                   SKIP_CHECKSUM
-                   SKIP_CHECKSUM
-                   SKIP_CHECKSUM
-                   SKIP_CHECKSUM
-                   SKIP_CHECKSUM)
-TERMUX_PKG_SKIP_SRC_EXTRACT=true
+TERMUX_PKG_SRCURL=git+https://github.com/termux/android-build-tools
+TERMUX_PKG_SHA256=SKIP_CHECKSUM
 TERMUX_PKG_BUILD_IN_SRC=true
 TERMUX_PKG_DEPENDS="fmt, libc++, libexpat, libpng, libzopfli, zlib"
 TERMUX_PKG_BUILD_DEPENDS="googletest"
 
-termux_step_post_get_source() {
-	# FIXME: We would like to enable checksums when downloading
-	# tar files, but they change each time as the tar metadata
-	# differs: https://github.com/google/gitiles/issues/84
+termux_step_get_source() {
+	local _TMP_CHECKOUT=$TERMUX_PKG_CACHEDIR/tmp-checkout
+	local _TMP_CHECKOUT_VERSION=$TERMUX_PKG_CACHEDIR/tmp-checkout-version
 
-	for i in $(seq 0 $(( ${#TERMUX_PKG_SRCURL[@]}-1 ))); do
-		git clone --depth 1 --single-branch \
-			--branch $TERMUX_PKG_GIT_BRANCH \
-			${TERMUX_PKG_SRCURL[$i]}
+	if [[ ! -f "$_TMP_CHECKOUT_VERSION" || "$(cat "$_TMP_CHECKOUT_VERSION")" != "$_ANDROID_BUILD_TOOLS_COMMIT" ]]; then
+		rm -rf "$_TMP_CHECKOUT"
+		git clone --depth 1 "${TERMUX_PKG_SRCURL:4}" "$_TMP_CHECKOUT"
+		git -C "$_TMP_CHECKOUT" fetch --depth 1 origin "$_ANDROID_BUILD_TOOLS_COMMIT"
+		git -C "$_TMP_CHECKOUT" checkout --detach "$_ANDROID_BUILD_TOOLS_COMMIT"
+		git -C "$_TMP_CHECKOUT" config submodule.vendor/aidl.url https://github.com/aosp-mirror-neo/platform_system_tools_aidl.git
+		git -C "$_TMP_CHECKOUT" config submodule.vendor/base.url https://github.com/aosp-mirror/platform_frameworks_base.git
+		git -C "$_TMP_CHECKOUT" config submodule.vendor/build.url https://github.com/aosp-mirror-neo/platform_build.git
+		git -C "$_TMP_CHECKOUT" config submodule.vendor/core.url https://github.com/aosp-mirror/platform_system_core.git
+		git -C "$_TMP_CHECKOUT" config submodule.vendor/incremental_delivery.url https://github.com/aosp-mirror-neo/platform_system_incremental_delivery.git
+		git -C "$_TMP_CHECKOUT" config submodule.vendor/libbase.url https://github.com/aosp-mirror-neo/platform_system_libbase.git
+		git -C "$_TMP_CHECKOUT" config submodule.vendor/libziparchive.url https://github.com/aosp-mirror-neo/platform_system_libziparchive.git
+		git -C "$_TMP_CHECKOUT" config submodule.vendor/logging.url https://github.com/aosp-mirror-neo/platform_system_logging.git
+		git -C "$_TMP_CHECKOUT" config submodule.vendor/native.url https://github.com/aosp-mirror-neo/platform_frameworks_native.git
+		git -C "$_TMP_CHECKOUT" config submodule.vendor/zopfli.url https://github.com/aosp-mirror-neo/platform_external_zopfli.git
+		git -C "$_TMP_CHECKOUT" submodule update --init --recursive --depth 1
+		echo "$_ANDROID_BUILD_TOOLS_COMMIT" > "$_TMP_CHECKOUT_VERSION"
+	fi
+
+	rm -rf "$TERMUX_PKG_SRCDIR"
+	cp -Rf "$_TMP_CHECKOUT" "$TERMUX_PKG_SRCDIR"
+}
+
+termux_step_post_get_source() {
+	local _dir
+	for _dir in aidl base build core incremental_delivery libbase libziparchive logging native zopfli; do
+		ln -s "vendor/$_dir" "$_dir"
 	done
 
 	for f in base/tools/aapt2/*.proto; do
 		sed -i 's:frameworks/base/tools/aapt2/::' $f
 	done
 
-	# Get zopfli source:
-	local ZOPFLI_VER=$(bash -c ". $TERMUX_SCRIPTDIR/packages/libzopfli/build.sh; echo \$TERMUX_PKG_VERSION")
-	local ZOPFLI_SHA256=$(bash -c ". $TERMUX_SCRIPTDIR/packages/libzopfli/build.sh; echo \$TERMUX_PKG_SHA256")
-	local ZOPFLI_TARFILE=$TERMUX_PKG_CACHEDIR/zopfli-${ZOPFLI_VER}.tar.gz
-	termux_download \
-		"https://github.com/google/zopfli/archive/zopfli-${ZOPFLI_VER}.tar.gz" \
-		$ZOPFLI_TARFILE \
-		$ZOPFLI_SHA256
-	tar xf $ZOPFLI_TARFILE
-	mv zopfli-zopfli-$ZOPFLI_VER zopfli
+	printf '%s\n' \
+		'#pragma once' \
+		'' \
+		'static inline bool android_content_res_resource_readwrite_flags() {' \
+		'  return false;' \
+		'}' > base/libs/androidfw/android_content_res.h
 }
 
 termux_step_pre_configure() {
@@ -67,8 +69,9 @@ termux_step_pre_configure() {
 	export PATH=$TERMUX_PKG_HOSTBUILD_DIR/_prefix/bin:$PATH
 
 	CFLAGS+=" -fPIC"
-	CXXFLAGS+=" -fPIC -std=c++17"
+	CXXFLAGS+=" -fPIC -std=gnu++2b"
 	CPPFLAGS+=" -DNDEBUG -D__ANDROID_SDK_VERSION__=__ANDROID_API__"
+	CPPFLAGS+=" -D_FILE_OFFSET_BITS=64"
 	CPPFLAGS+=" -DPROTOBUF_USE_DLLS"
 
 	_TMP_LIBDIR=$TERMUX_PKG_SRCDIR/_lib
@@ -78,7 +81,11 @@ termux_step_pre_configure() {
 	rm -rf $_TMP_BINDIR
 	mkdir -p $_TMP_BINDIR
 
-	LDFLAGS+=" -llog -L$_TMP_LIBDIR"
+	LDFLAGS="-L$_TMP_LIBDIR $LDFLAGS -llog"
+}
+
+termux_step_configure() {
+	return
 }
 
 termux_step_make() {
@@ -98,8 +105,11 @@ termux_step_make() {
 	local AAPT2_SRCDIR=$TERMUX_PKG_SRCDIR/base/tools/aapt2
 	local ZIPALIGN_SRCDIR=$TERMUX_PKG_SRCDIR/build/tools/zipalign
 	local AIDL_SRCDIR=$TERMUX_PKG_SRCDIR/aidl
+	local NATIVE_SRCDIR=$TERMUX_PKG_SRCDIR/native
 
 	CPPFLAGS+=" -I. -I./include
+		-I$LIBUTILS_SRCDIR/binder/include
+		-I$NATIVE_SRCDIR/include
 		-I$LIBBASE_SRCDIR/include
 		-I$LIBLOG_INCDIR
 		-I$CORE_INCDIR"
@@ -115,7 +125,10 @@ termux_step_make() {
 	# Build libcutils:
 	cd $LIBCUTILS_SRCDIR
 	for f in $libcutils_sources; do
-		$CXX $CXXFLAGS $CPPFLAGS $f -c
+		case "$f" in
+			*.c) $CC $CFLAGS $CPPFLAGS $f -c ;;
+			*) $CXX $CXXFLAGS $CPPFLAGS $f -c ;;
+		esac
 	done
 	$CXX $CXXFLAGS *.o -shared $LDFLAGS \
 		-landroid-base \
@@ -145,6 +158,7 @@ termux_step_make() {
 	CPPFLAGS+=" -I$LIBZIPARCHIVE_SRCDIR/include"
 
 	CPPFLAGS+=" -I$INCFS_UTIL_SRCDIR/include"
+	CPPFLAGS+=" -I$ANDROIDFW_SRCDIR/include -I$ANDROIDFW_SRCDIR/include_pathutils"
 
 	# Build libandroidfw:
 	cd $ANDROIDFW_SRCDIR
@@ -156,10 +170,9 @@ termux_step_make() {
 		-landroid-cutils \
 		-landroid-utils \
 		-landroid-ziparchive \
+		-lpng \
 		-lz \
 		-o $_TMP_LIBDIR/libandroid-fw.so
-
-	CPPFLAGS+=" -I$ANDROIDFW_SRCDIR/include"
 
 	# Build aapt:
 	cd $AAPT_SRCDIR
@@ -190,6 +203,7 @@ termux_step_make() {
 		-landroid-ziparchive \
 		-lexpat \
 		-lpng \
+		-lfmt \
 		-lprotobuf \
 		$($TERMUX_SCRIPTDIR/packages/libprotobuf/interface_link_libraries.sh) \
 		-o $_TMP_BINDIR/aapt2
@@ -208,7 +222,7 @@ termux_step_make() {
 
 	# Build aidl:
 	cd $AIDL_SRCDIR
-	flex aidl_language_l.ll
+	flex -o aidl_language_l.cpp aidl_language_l.ll
 	bison --header=aidl_language_y.h aidl_language_y.yy
 	cat >> aidl_language_y.h <<-EOF
 		typedef union yy::parser::value_type YYSTYPE;
@@ -235,7 +249,7 @@ termux_step_make_install() {
 	rm -rf android-jar
 	mkdir android-jar
 	cd android-jar
-	cp $ANDROID_HOME/platforms/android-35/android.jar .
+	cp $ANDROID_HOME/platforms/android-36/android.jar .
 	unzip -q android.jar
 	mkdir -p $TERMUX_PREFIX/share/aapt
 	jar cfM $TERMUX_PREFIX/share/aapt/android.jar AndroidManifest.xml resources.arsc

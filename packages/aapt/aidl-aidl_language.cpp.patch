@@ -1,0 +1,11 @@
+--- a/aidl/aidl_language.cpp
++++ b/aidl/aidl_language.cpp
+@@ -650,0 +651,8 @@
++FixedSizeArray::FixedSizeArray(std::unique_ptr<AidlConstantValue> dim) {
++  dimensions.push_back(std::move(dim));
++}
++
++FixedSizeArray::~FixedSizeArray() = default;
++FixedSizeArray::FixedSizeArray(FixedSizeArray&&) noexcept = default;
++FixedSizeArray& FixedSizeArray::operator=(FixedSizeArray&&) noexcept = default;
++
