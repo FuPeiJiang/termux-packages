@@ -2,10 +2,9 @@ TERMUX_PKG_HOMEPAGE=https://elinux.org/Android_aapt
 TERMUX_PKG_DESCRIPTION="Android Asset Packaging Tool"
 TERMUX_PKG_LICENSE="Apache-2.0"
 TERMUX_PKG_MAINTAINER="@termux"
-_TAG_VERSION=13.0.0
-_TAG_REVISION=6
+_TAG_VERSION=16.0.0
+_TAG_REVISION=4
 TERMUX_PKG_VERSION=${_TAG_VERSION}.${_TAG_REVISION}
-TERMUX_PKG_REVISION=23
 TERMUX_PKG_SRCURL=(https://android.googlesource.com/platform/frameworks/base
                    https://android.googlesource.com/platform/system/core
                    https://android.googlesource.com/platform/system/libbase
@@ -34,9 +33,24 @@ termux_step_post_get_source() {
 	# differs: https://github.com/google/gitiles/issues/84
 
 	for i in $(seq 0 $(( ${#TERMUX_PKG_SRCURL[@]}-1 ))); do
-		git clone --depth 1 --single-branch \
-			--branch $TERMUX_PKG_GIT_BRANCH \
-			${TERMUX_PKG_SRCURL[$i]}
+		case "${TERMUX_PKG_SRCURL[$i]}" in
+			https://android.googlesource.com/platform/frameworks/base)
+				git clone --depth 1 --single-branch --filter=blob:none --sparse \
+					--branch "$TERMUX_PKG_GIT_BRANCH" \
+					"${TERMUX_PKG_SRCURL[$i]}" base
+
+				git -C base sparse-checkout set \
+					tools/aapt \
+					tools/aapt2 \
+					libs/androidfw \
+					cmds/idmap2/libidmap2_policies/include
+				;;
+			*)
+				git clone --depth 1 --single-branch \
+					--branch "$TERMUX_PKG_GIT_BRANCH" \
+					"${TERMUX_PKG_SRCURL[$i]}"
+				;;
+		esac
 	done
 
 	for f in base/tools/aapt2/*.proto; do
@@ -53,6 +67,13 @@ termux_step_post_get_source() {
 		$ZOPFLI_SHA256
 	tar xf $ZOPFLI_TARFILE
 	mv zopfli-zopfli-$ZOPFLI_VER zopfli
+
+	printf '%s\n' \
+		'#pragma once' \
+		'' \
+		'static inline bool android_content_res_resource_readwrite_flags() {' \
+		'  return false;' \
+		'}' > base/libs/androidfw/android_content_res.h
 }
 
 termux_step_pre_configure() {
@@ -67,8 +88,9 @@ termux_step_pre_configure() {
 	export PATH=$TERMUX_PKG_HOSTBUILD_DIR/_prefix/bin:$PATH
 
 	CFLAGS+=" -fPIC"
-	CXXFLAGS+=" -fPIC -std=c++17"
+	CXXFLAGS+=" -fPIC -std=gnu++2b"
 	CPPFLAGS+=" -DNDEBUG -D__ANDROID_SDK_VERSION__=__ANDROID_API__"
+	CPPFLAGS+=" -D_FILE_OFFSET_BITS=64"
 	CPPFLAGS+=" -DPROTOBUF_USE_DLLS"
 
 	_TMP_LIBDIR=$TERMUX_PKG_SRCDIR/_lib
@@ -100,6 +122,7 @@ termux_step_make() {
 	local AIDL_SRCDIR=$TERMUX_PKG_SRCDIR/aidl
 
 	CPPFLAGS+=" -I. -I./include
+		-I$LIBUTILS_SRCDIR/binder/include
 		-I$LIBBASE_SRCDIR/include
 		-I$LIBLOG_INCDIR
 		-I$CORE_INCDIR"
@@ -115,7 +138,10 @@ termux_step_make() {
 	# Build libcutils:
 	cd $LIBCUTILS_SRCDIR
 	for f in $libcutils_sources; do
-		$CXX $CXXFLAGS $CPPFLAGS $f -c
+		case "$f" in
+			*.c) $CC $CFLAGS $CPPFLAGS $f -c ;;
+			*) $CXX $CXXFLAGS $CPPFLAGS $f -c ;;
+		esac
 	done
 	$CXX $CXXFLAGS *.o -shared $LDFLAGS \
 		-landroid-base \
@@ -145,6 +171,7 @@ termux_step_make() {
 	CPPFLAGS+=" -I$LIBZIPARCHIVE_SRCDIR/include"
 
 	CPPFLAGS+=" -I$INCFS_UTIL_SRCDIR/include"
+	CPPFLAGS+=" -I$ANDROIDFW_SRCDIR/include -I$ANDROIDFW_SRCDIR/include_pathutils"
 
 	# Build libandroidfw:
 	cd $ANDROIDFW_SRCDIR
@@ -156,10 +183,9 @@ termux_step_make() {
 		-landroid-cutils \
 		-landroid-utils \
 		-landroid-ziparchive \
+		-lpng \
 		-lz \
 		-o $_TMP_LIBDIR/libandroid-fw.so
-
-	CPPFLAGS+=" -I$ANDROIDFW_SRCDIR/include"
 
 	# Build aapt:
 	cd $AAPT_SRCDIR
@@ -190,6 +216,7 @@ termux_step_make() {
 		-landroid-ziparchive \
 		-lexpat \
 		-lpng \
+		-lfmt \
 		-lprotobuf \
 		$($TERMUX_SCRIPTDIR/packages/libprotobuf/interface_link_libraries.sh) \
 		-o $_TMP_BINDIR/aapt2
@@ -208,7 +235,7 @@ termux_step_make() {
 
 	# Build aidl:
 	cd $AIDL_SRCDIR
-	flex aidl_language_l.ll
+	flex -o aidl_language_l.cpp aidl_language_l.ll
 	bison --header=aidl_language_y.h aidl_language_y.yy
 	cat >> aidl_language_y.h <<-EOF
 		typedef union yy::parser::value_type YYSTYPE;
@@ -235,7 +262,7 @@ termux_step_make_install() {
 	rm -rf android-jar
 	mkdir android-jar
 	cd android-jar
-	cp $ANDROID_HOME/platforms/android-35/android.jar .
+	cp $ANDROID_HOME/platforms/android-36/android.jar .
 	unzip -q android.jar
 	mkdir -p $TERMUX_PREFIX/share/aapt
 	jar cfM $TERMUX_PREFIX/share/aapt/android.jar AndroidManifest.xml resources.arsc

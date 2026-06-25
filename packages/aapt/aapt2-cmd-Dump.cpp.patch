@@ -1,0 +1,4 @@
+--- a/base/tools/aapt2/cmd/Dump.cpp
++++ b/base/tools/aapt2/cmd/Dump.cpp
+@@ -21,0 +22 @@
++#include <google/protobuf/io/zero_copy_stream_impl.h>
